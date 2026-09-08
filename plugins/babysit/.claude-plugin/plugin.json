@@ -1,0 +1,19 @@
+{
+  "name": "babysit",
+  "version": "1.0.0",
+  "description": "Launch or adopt long-running pipelines (hours to days) under a zero-token watcher that wakes Claude exactly once, on the first actionable event, with a pre-digested report instead of a multi-GB log.",
+  "author": {
+    "name": "Simone Ciccolella",
+    "email": "simone.ciccolella@unimib.it"
+  },
+  "license": "MIT",
+  "keywords": [
+    "pipeline",
+    "background-jobs",
+    "monitoring",
+    "snakemake",
+    "long-running",
+    "watcher",
+    "automation"
+  ]
+}

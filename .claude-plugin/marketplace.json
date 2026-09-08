@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "babysit",
+  "description": "Marketplace for the babysit plugin: watch long-running pipelines without polling or burning tokens.",
+  "owner": {
+    "name": "Simone Ciccolella",
+    "email": "simone.ciccolella@unimib.it"
+  },
+  "plugins": [
+    {
+      "name": "babysit",
+      "description": "Launch or adopt long-running pipelines (hours to days) under a zero-token watcher that wakes Claude exactly once, on the first actionable event, with a pre-digested report instead of a multi-GB log.",
+      "author": {
+        "name": "Simone Ciccolella",
+        "email": "simone.ciccolella@unimib.it"
+      },
+      "category": "productivity",
+      "source": "./plugins/babysit"
+    }
+  ]
+}
