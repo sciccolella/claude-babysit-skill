@@ -16,22 +16,29 @@ install path, and track liveness through pidfiles in the rundir, never through t
 path. The only absolute path used anywhere is `$HOME/.claude/babysit_rundirs.list` — a shared
 registry so `babysit-status` can find every pipeline from any directory, on any session.
 
-## Workflow-agnostic vs. Snakemake-specific
+## Workflow-agnostic core vs. pluggable profiles
 
-**Launch, watch, and notify are workflow-agnostic** — `run_pipeline.sh` / `watch_pipeline.sh` /
-`pipeline_report.sh` work for any long-running command, not just Snakemake. What *is*
-Snakemake-specific:
+**Launch, watch, and notify are fully workflow-agnostic** — `run_pipeline.sh` /
+`watch_pipeline.sh` / `pipeline_report.sh` work for any long-running command, and the real
+exit-code path, disk-full/OOM/`Killed` fatal markers, and byte-growth stall detection never
+depend on which tool is running.
 
-- `attach_pipeline.sh --auto` discovery looks for a `snakemake` process and
-  `.snakemake/log/*.snakemake.log`.
-- Outcome inference for **adopted** runs (see below) reads Snakemake's own terminal summary
-  lines (`N of N steps (100%) done` vs. `Exiting because a job execution failed`).
-- A few failure-classification patterns in `pipeline_report.sh` (`snakemake_job_failure`,
-  `snakemake_dag_error`) are Snakemake log grammar.
+Tool-specific behavior — outcome inference for **adopted/log-only** runs (no exit code exists
+there), progress-line parsing, and failure-classification naming — comes from a **profile**,
+picked automatically at launch/attach time from the command line and log shape, and recorded in
+`RUNDIR/profile`. See `profiles/README.md` for the profile contract and `profiles/snakemake.sh`
+for the only profile shipped today.
 
-On another workflow engine (Nextflow, a bare script, a training loop) you still get the full
-launch/watch/notify contract and death/stall detection — just coarser failure classification,
-and `--auto` attach discovery won't find your process (use `--pid` or `--log` instead).
+"No profile matched" is a supported, visible state, not silent degradation: `profile: null` in
+`pipeline_status.json`, and `report.md`/`pipeline_peek.sh` say so explicitly. On another workflow
+engine (Nextflow, a bare script, a training loop) with no matching profile, you still get the
+full launch/watch/notify contract and death/stall detection — just generic failure
+classification and no progress line, until a profile is added for it (drop a new file in
+`profiles/`, no code changes elsewhere needed).
+
+`attach_pipeline.sh --auto` process discovery is separate from profiles and still
+Snakemake-only (`pgrep -f snakemake`) — see `TODO.md`. `--pid`/`--log` already cover adopting
+any other tool explicitly.
 
 ## Status vocabulary
 
