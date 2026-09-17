@@ -3,13 +3,28 @@
 # profile contract; this file only implements detection/loading.
 set -u
 
-PROFILES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../profiles" && pwd)"
+# The plugin layout keeps profiles/ as a sibling of scripts/; a flat personal
+# install (all scripts copied into one bin/ dir with no plugin nesting) can
+# instead keep them in a profiles/ subdirectory next to the scripts. Try both;
+# neither existing is a supported state too (PROFILES_DIR stays empty, and
+# detect_profile/load_profile below already treat "no profiles found" as a
+# no-op, same as "no profile matched").
+_scripts_dir="$(dirname "${BASH_SOURCE[0]}")"
+if [ -d "$_scripts_dir/../profiles" ]; then
+    PROFILES_DIR="$(cd "$_scripts_dir/../profiles" && pwd)"
+elif [ -d "$_scripts_dir/profiles" ]; then
+    PROFILES_DIR="$(cd "$_scripts_dir/profiles" && pwd)"
+else
+    PROFILES_DIR=""
+fi
+unset _scripts_dir
 
 # Try each profile's detector against a command line / log path; echo the
 # first matching profile's name. Prints nothing and returns 1 if none match
 # — callers treat that as "generic", never as an error.
 detect_profile() {
     local cmd="$1" log="$2" f
+    [ -n "$PROFILES_DIR" ] || return 1
     for f in "$PROFILES_DIR"/*.sh; do
         [ -f "$f" ] || continue
         if ( source "$f"; profile_detect "$cmd" "$log" ) 2>/dev/null; then
