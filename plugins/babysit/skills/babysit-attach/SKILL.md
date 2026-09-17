@@ -69,9 +69,10 @@ the report's adopted-run note before drawing conclusions from `status`.
   `PushNotification` with what's known (last log lines, duration) and ask.
 - **`DIED_UNCLEAN`** / **`NOTSTARTED`** / **`STALLED`** / **`FATAL_DETECTED`** — same meaning
   and same handling as in `babysit-run`.
-- **In doubt, same rule as `babysit-run`:** any fix that edits the Snakefile/config/params, any
-  resource bump, any `oom_suspected` classification — always escalate via `needs_human.md` +
-  `PushNotification`, regardless of confidence.
+- **In doubt, same rule as `babysit-run`:** any fix that edits the pipeline's own script/config/
+  parameters (Snakefile, shell script flags, YAML config, ...), any resource bump, any
+  `oom_suspected` classification — always escalate via `needs_human.md` + `PushNotification`,
+  regardless of confidence.
 
 The user's only expected involvement is the push notification when something actionable
 happens.

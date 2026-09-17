@@ -9,6 +9,12 @@ set -u
 RUNDIR="${1:?usage: pipeline_report.sh RUNDIR STATUS}"
 STATUS="${2:?usage: pipeline_report.sh RUNDIR STATUS}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_profiles.sh"
+profile_name=""
+[ -f "$RUNDIR/profile" ] && profile_name="$(cat "$RUNDIR/profile" 2>/dev/null || echo '')"
+load_profile "$profile_name"
+
 LOG="$RUNDIR/pipeline.log"
 EXIT_FILE="$RUNDIR/pipeline.exit"
 CMD_FILE="$RUNDIR/pipeline.cmd"
@@ -49,10 +55,12 @@ case "$STATUS" in
             classification="sigterm"
         elif [ "$exit_code" = "130" ]; then
             classification="sigint"
-        elif [ -f "$LOG" ] && grep -qE 'Error in rule ' "$LOG" 2>/dev/null; then
-            classification="snakemake_job_failure"
-        elif [ -f "$LOG" ] && grep -qE 'MissingInputException|WorkflowError' "$LOG" 2>/dev/null; then
-            classification="snakemake_dag_error"
+        elif [ -n "$PROFILE_PATTERN_JOB_FAILURE" ] && [ -f "$LOG" ] \
+                && grep -qE "$PROFILE_PATTERN_JOB_FAILURE" "$LOG" 2>/dev/null; then
+            classification="${PROFILE_CLASSIFY_JOB_FAILURE:-fatal_pattern_matched:$profile_name}"
+        elif [ -n "$PROFILE_PATTERN_DAG_ERROR" ] && [ -f "$LOG" ] \
+                && grep -qE "$PROFILE_PATTERN_DAG_ERROR" "$LOG" 2>/dev/null; then
+            classification="${PROFILE_CLASSIFY_DAG_ERROR:-fatal_pattern_matched:$profile_name}"
         else
             classification="generic_failure"
         fi
@@ -83,10 +91,11 @@ if [ -f "$ATTEMPTS_FILE" ]; then
 fi
 
 # Snakemake's "Error in rule X:" block names the failing job's own log file —
-# that's where the real diagnosis is, not the master log tail.
+# that's where the real diagnosis is, not the master log tail. Profile-gated:
+# this exact block format is Snakemake's own, not a generic pattern.
 failing_rule=""
 failing_job_log=""
-if [ -f "$LOG" ]; then
+if [ "$profile_name" = "snakemake" ] && [ -f "$LOG" ]; then
     rule_line="$(grep -nE '^Error in rule ' "$LOG" 2>/dev/null | tail -1)"
     if [ -n "$rule_line" ]; then
         line_no="${rule_line%%:*}"
@@ -96,11 +105,15 @@ if [ -f "$LOG" ]; then
     fi
 fi
 
+# Steps-done/total is Snakemake's own step-count shape; a profile with a
+# differently-shaped progress line (e.g. a percent-complete bar) only gets
+# the raw progress_line text below, not steps_done/steps_total.
 steps_done=""
 steps_total=""
-if [ -f "$LOG" ]; then
-    progress_line="$(grep -oE '[0-9]+ of [0-9]+ steps? \([0-9.]+%\) done' "$LOG" 2>/dev/null | tail -1)"
-    if [ -n "$progress_line" ]; then
+progress_line=""
+if [ -n "$PROFILE_PROGRESS_REGEX" ] && [ -f "$LOG" ]; then
+    progress_line="$(grep -oE "$PROFILE_PROGRESS_REGEX" "$LOG" 2>/dev/null | tail -1)"
+    if [ "$profile_name" = "snakemake" ] && [ -n "$progress_line" ]; then
         steps_done="$(printf '%s' "$progress_line" | grep -oE '^[0-9]+')"
         steps_total="$(printf '%s' "$progress_line" | grep -oE 'of [0-9]+' | grep -oE '[0-9]+')"
     fi
@@ -108,6 +121,7 @@ fi
 
 jq -n \
     --arg status "$STATUS" \
+    --arg profile "$profile_name" \
     --arg exit_code "$exit_code" \
     --arg signal "$signal" \
     --arg classification "$classification" \
@@ -122,6 +136,7 @@ jq -n \
     --argjson adopted "$is_adopted" \
     '{
         status: $status,
+        profile: (if $profile == "" then null else $profile end),
         adopted: ($adopted == 1),
         exit_code: (if $exit_code == "" then null else ($exit_code | tonumber) end),
         signal: (if $signal == "" then null else $signal end),
@@ -150,7 +165,16 @@ jq -n \
     [ -n "$started_at" ] && echo "Started: $started_at"
     echo "Ended: $ended_at"
     [ -n "$duration_s" ] && echo "Duration: ${duration_s}s"
-    [ -n "$steps_done" ] && echo "Progress: $steps_done of $steps_total steps done"
+    if [ -n "$profile_name" ]; then
+        echo "Profile: $profile_name"
+    else
+        echo "Profile: none matched — generic byte-growth/exit-code tracking only"
+    fi
+    if [ -n "$steps_done" ]; then
+        echo "Progress: $steps_done of $steps_total steps done"
+    elif [ -n "$progress_line" ]; then
+        echo "Progress: $progress_line"
+    fi
     echo "Attempt: $attempt"
     [ -f "$CMD_FILE" ] && echo "Command: $(cat "$CMD_FILE")"
 

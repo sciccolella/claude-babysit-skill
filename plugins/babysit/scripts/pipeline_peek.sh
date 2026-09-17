@@ -12,6 +12,9 @@ set -u
 
 REGISTRY="$HOME/.claude/babysit_rundirs.list"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_profiles.sh"
+
 MODE_ARG=""
 RUNDIR=""
 CWD_ARG=""
@@ -64,6 +67,10 @@ peek_one() {
     local mode="launched"
     [ -f "$rundir/adopted" ] && mode="$(cat "$rundir/adopted" 2>/dev/null || echo pid)"
 
+    local profile_name=""
+    [ -f "$rundir/profile" ] && profile_name="$(cat "$rundir/profile" 2>/dev/null || echo '')"
+    load_profile "$profile_name"
+
     local cmd=""
     [ -f "$rundir/pipeline.cmd" ] && cmd="$(cat "$rundir/pipeline.cmd" 2>/dev/null || echo '')"
 
@@ -77,6 +84,7 @@ peek_one() {
 
     echo "== $rundir =="
     echo "  mode: $mode"
+    echo "  profile: ${profile_name:-none (generic byte-growth/exit-code tracking only)}"
     [ -n "$cmd" ] && echo "  command: $cmd"
     [ -n "$started_at" ] && echo "  started: $started_at (running ${elapsed:+$(human_dur "$elapsed")})"
 
@@ -139,7 +147,7 @@ peek_one() {
         size=$(wc -c < "$log" 2>/dev/null || echo 0)
         mtime=$(stat -c %Y "$log" 2>/dev/null || echo 0)
         stale=$((now_epoch - mtime))
-        progress="$(grep -oE '[0-9]+ of [0-9]+ steps? \([0-9.]+%\) done' "$log" 2>/dev/null | tail -1)"
+        [ -n "$PROFILE_PROGRESS_REGEX" ] && progress="$(grep -oE "$PROFILE_PROGRESS_REGEX" "$log" 2>/dev/null | tail -1)"
         echo "  log: ${size}B, last write $(human_dur "$stale") ago"
         [ -n "$progress" ] && echo "  progress: $progress"
     fi

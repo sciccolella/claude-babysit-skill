@@ -23,7 +23,9 @@ if [ $# -eq 0 ]; then
     exit 64
 fi
 
-RUNNER="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_pipeline_runner.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RUNNER="$SCRIPT_DIR/_pipeline_runner.sh"
+source "$SCRIPT_DIR/_profiles.sh"
 
 mkdir -p "$RUNDIR"
 
@@ -46,6 +48,7 @@ printf '%s' "$((prev_attempts + 1))" > "$attempts_file"
 
 printf '%s\n' "$*" > "$RUNDIR/pipeline.cmd"
 date -u +%Y-%m-%dT%H:%M:%SZ > "$RUNDIR/started_at"
+printf '%s' "$(detect_profile "$*" "")" > "$RUNDIR/profile"
 
 setsid "$RUNNER" "$RUNDIR" "$@" </dev/null >>"$RUNDIR/pipeline.log" 2>&1 &
 pgid=$!

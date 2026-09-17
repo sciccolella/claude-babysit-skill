@@ -35,6 +35,9 @@ done
 
 die() { echo "attach: $*" >&2; exit 65; }
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/_profiles.sh"
+
 # Field 22 of /proc/PID/stat is starttime, but comm (field 2) is parenthesised
 # and may itself contain spaces and parens, so a naive $22 is wrong. Strip
 # through the last ") " and index from there: overall field 22 == field 20 after.
@@ -114,6 +117,10 @@ touch "$REGISTRY"
 grep -qxF "$RUNDIR_ABS" "$REGISTRY" 2>/dev/null || echo "$RUNDIR_ABS" >> "$REGISTRY"
 
 printf '%s' "$MODE" > "$RUNDIR/adopted"
+
+cmd_for_detect=""
+[ -n "$PID" ] && cmd_for_detect="$(tr '\0' ' ' < "/proc/$PID/cmdline" 2>/dev/null)"
+printf '%s' "$(detect_profile "$cmd_for_detect" "$LOG_ABS")" > "$RUNDIR/profile"
 
 if [ -n "$LOG_ABS" ]; then
     ln -s "$LOG_ABS" "$RUNDIR/pipeline.log"

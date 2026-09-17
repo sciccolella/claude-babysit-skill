@@ -63,11 +63,12 @@ Read **only** `<rundir>/pipeline_status.json` and `<rundir>/report.md` — not t
     confirmed clear; a transient network fetch failure.
   - **In doubt** — write `<rundir>/needs_human.md` with the question and context, then
     `PushNotification` the question. It should be answerable from a phone via Remote Control.
-  - **Always treat as in doubt, regardless of apparent confidence:** any edit to the Snakefile /
-    config / rule parameters; any tool-version change; any deletion of existing outputs; any
-    resource bump; every `oom_suspected` classification (the fix is inherently a resource or
-    parameter decision, and — per the report — the diagnosis itself is not certain: exit 137
-    with no exit file is indistinguishable from a manual `kill -9`).
+  - **Always treat as in doubt, regardless of apparent confidence:** any edit to the pipeline's
+    own script/config/parameters (a Snakefile, a shell script's flags, a YAML config, ...); any
+    tool-version change; any deletion of existing outputs; any resource bump; every
+    `oom_suspected` classification (the fix is inherently a resource or parameter decision, and —
+    per the report — the diagnosis itself is not certain: exit 137 with no exit file is
+    indistinguishable from a manual `kill -9`).
 - **Retry budget** — `pipeline_status.json.attempt >= 2` means this would be attempt 3.
   Always escalate to `needs_human.md` + notification at that point, whatever the confidence in
   the fix.

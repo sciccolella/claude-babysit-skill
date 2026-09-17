@@ -11,14 +11,22 @@
 #
 # Exit codes / STATUS line (printed to stdout as the last line):
 #   SUCCESS          0   pipeline.exit == 0
-#   SUCCESS_INFERRED 0   adopted; log shows snakemake's 100%-done terminal line
+#   SUCCESS_INFERRED 0   adopted; log shows the matched profile's success terminal line
 #   FAILED           1   pipeline.exit != 0
-#   FAILED_INFERRED  1   adopted; log shows snakemake's failure terminal line
-#   FATAL_DETECTED   1   a narrow fatal marker matched in new log output
+#   FAILED_INFERRED  1   adopted; log shows the matched profile's failure terminal line
+#   FATAL_DETECTED   1   a narrow fatal marker (generic, or from the matched profile) matched
 #   STALLED          2   log size unchanged for --stall-timeout seconds (advisory only)
 #   NOTSTARTED       3   process was never observed alive (empty/bad RUNDIR)
 #   DIED_UNCLEAN     4   process was alive, then vanished, with no exit file
-#   ENDED_UNKNOWN    5   adopted; process ended with no terminal line either way
+#   ENDED_UNKNOWN    5   adopted; process ended with no terminal line either way (including:
+#                        no profile matched, so no terminal-line pattern existed to check)
+#
+# Outcome inference for adopted/log-only runs (SUCCESS_INFERRED/FAILED_INFERRED/
+# ENDED_UNKNOWN) is driven by a profile — see ../profiles/README.md — selected
+# at launch/attach time and recorded in RUNDIR/profile. No profile matched is a
+# supported, reported state (profile: null in pipeline_status.json), not an
+# error; it only means outcome inference for that run has no terminal-line
+# signal to go on, same as it always did before profiles existed.
 set -u
 
 RUNDIR=".pipeline-run"
@@ -38,6 +46,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPORTER="$SCRIPT_DIR/pipeline_report.sh"
+source "$SCRIPT_DIR/_profiles.sh"
 
 # Lets pipeline_peek.sh tell "still running, being watched" apart from "still
 # running, nothing will ever notify anyone" (watcher crashed / session died
@@ -69,13 +78,23 @@ fi
 # Fatal markers deliberately narrow — never bare error|failed|exception|traceback.
 # Common bioinformatics tools (e.g. hifiasm, snakemake) print those bare words in
 # normal, non-fatal output, so a generic match would false-positive constantly.
-FATAL_PATTERN='Error in rule |Exiting because a job execution failed|MissingInputException|WorkflowError|No space left on device|Out of memory|oom-kill|^Killed$'
+# This generic tier applies to every pipeline regardless of profile.
+FATAL_PATTERN='No space left on device|Out of memory|oom-kill|^Killed$'
 
-# Snakemake's own terminal summary lines. Unlike the generic patterns above these
-# are only emitted once the workflow is finishing, which is what makes outcome
-# inference defensible for adopted runs.
-FAIL_TERMINAL='Exiting because a job execution failed|^WorkflowError|^MissingInputException'
-SUCCESS_TERMINAL='[0-9]+ of [0-9]+ steps \(100%\) done|^Nothing to be done'
+PROFILE_FILE="$RUNDIR/profile"
+profile_name=""
+[ -f "$PROFILE_FILE" ] && profile_name="$(cat "$PROFILE_FILE" 2>/dev/null || echo '')"
+load_profile "$profile_name"
+
+# A matched profile adds its own fatal markers and terminal-line patterns (the
+# latter used only for outcome inference on adopted/log-only runs, where a
+# terminal summary line is the only signal available at all). No profile
+# matched is a supported state, not an error: FAIL_TERMINAL/SUCCESS_TERMINAL
+# then stay empty and log_matches() below treats an empty pattern as "never
+# matches" rather than "matches everything".
+[ -n "$PROFILE_FATAL_EXTRA" ] && FATAL_PATTERN="$PROFILE_FATAL_EXTRA|$FATAL_PATTERN"
+FAIL_TERMINAL="$PROFILE_FAIL_TERMINAL"
+SUCCESS_TERMINAL="$PROFILE_SUCCESS_TERMINAL"
 
 keep_going=0
 if [ -f "$CMD_FILE" ] && grep -qE -- '(^| )(--keep-going|-k)( |$)' "$CMD_FILE"; then
@@ -105,6 +124,7 @@ alive() {
 }
 
 log_matches() {
+    [ -n "$1" ] || return 1
     [ -f "$LOG" ] || return 1
     grep -qE "$1" "$LOG" 2>/dev/null
 }
